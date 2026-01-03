@@ -1,0 +1,2413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Kitchen: Story Mode</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #0f1a2f;
+    --text: #e7eefc;
+    --muted: #b8c7e6;
+    --border: rgba(231,238,252,.12);
+    --accent: #6ee7ff;
+    --bad: #ff6b6b;
+    --good: #7dff9f;
+  }
+  
+  body {
+    background: radial-gradient(1200px 600px at 20% -20%, rgba(110,231,255,.18), transparent 60%),
+                radial-gradient(1000px 500px at 110% 0%, rgba(125,255,159,.10), transparent 60%),
+                var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  
+  .stat-card {
+    background: rgba(15,26,47,.92);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  
+  .btn-primary {
+    background: rgba(110,231,255,.14);
+    border: 1px solid rgba(110,231,255,.35);
+    padding: 10px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .btn-primary:hover {
+    border-color: rgba(110,231,255,.65);
+    background: rgba(110,231,255,.24);
+  }
+  
+  .btn-secondary {
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  
+  .choice-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    background: rgba(255,255,255,.04);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .choice-card:hover {
+    background: rgba(255,255,255,.08);
+    border-color: rgba(110,231,255,.35);
+  }
+  
+  .result-good {
+    border-color: rgba(125,255,159,.35);
+    background: rgba(125,255,159,.05);
+  }
+  
+  .result-bad {
+    border-color: rgba(255,107,107,.35);
+    background: rgba(255,107,107,.05);
+  }
+  
+  .progress-bar {
+    height: 8px;
+    background: rgba(255,255,255,.1);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6ee7ff, #7dff9f);
+    transition: width 0.3s;
+  }
+
+  /* Tailwind fallback helpers (so content is visible even if CDN fails) */
+  .min-h-screen{min-height:100vh;}
+  .text-center{text-align:center;}
+  .mx-auto{margin-left:auto;margin-right:auto;}
+  .px-4{padding-left:1rem;padding-right:1rem;}
+  .py-10{padding-top:2.5rem;padding-bottom:2.5rem;}
+  .py-8{padding-top:2rem;padding-bottom:2rem;}
+  .mb-6{margin-bottom:1.5rem;}
+  .mb-8{margin-bottom:2rem;}
+  .text-xl{font-size:1.25rem;}
+  .text-3xl{font-size:1.875rem;}
+  .text-5xl{font-size:3rem;}
+  .font-bold{font-weight:700;}
+  .text-gray-300{color:#d1d5db;}
+  .text-gray-400{color:#9ca3af;}
+  .text-gray-500{color:#6b7280;}
+  .bg-clip-text{-webkit-background-clip:text;background-clip:text;}
+  .text-transparent{color:transparent;}
+</style>
+</head>
+<body class="p-4 md:p-6">
+
+<div id="app" class="max-w-7xl mx-auto"></div>
+
+<script>
+class CulinaryStorySimulator {
+  constructor() {
+    this.state = {
+      screen: 'welcome', // welcome, country_select, team_draft, story, competition, season_end
+      
+      // Career progression
+      country: null,
+      season: 1,
+      week: 1,
+      chapter: 1,
+      
+      // Team state
+      team: {
+        budget: 3000,
+        reputation: 10,
+        morale: 50,
+        cohesion: 45,
+        fatigue: 0,
+        available_hours: 24,
+        risk: 0,
+        readiness: 0
+      },
+      
+      // Roster
+      members: [],
+      
+      // Story progression
+      flags: new Set(),
+      completedMissions: [],
+      currentMission: null,
+      
+      // Season structure
+      totalWeeks: 20,
+      competitions: [],
+      upcomingCompetition: null,
+      hotKitchen: null,
+      
+      // History
+      medals: { gold: 0, silver: 0, bronze: 0 },
+      totalCompetitions: 0,
+      seasonHistory: []
+    };
+    
+    this.countries = this.initializeCountries();
+    this.archetypes = this.initializeArchetypes();
+    this.missions = this.initializeMissions();
+    this.competitions = this.initializeCompetitions();
+    
+    this.render();
+  }
+  
+  initializeCountries() {
+    return [
+      {
+        id: 'AU',
+        name: 'Australia',
+        flag: '🇦🇺',
+        specialty: 'Grit & Fresh Local',
+        description: 'Master funding hustle, resilience, and team culture in a competitive landscape',
+        pressures: ['Funding challenges', 'Travel logistics', 'Industry mentorship'],
+        learns: ['Resilience', 'Sponsorship reality', 'Team culture'],
+        startingBonus: { budget: 500 },
+        modifiers: {
+          sponsor_difficulty: 0.8,
+          conflict_chance: 0.9,
+          fatigue_recovery: 1.1
+        },
+        rubric_bias: {
+          taste: 1.1,
+          technique: 0.95,
+          workflow: 1.05,
+          hygiene: 1.0,
+          presentation: 0.95,
+          timing: 1.0
+        }
+      },
+      {
+        id: 'JP',
+        name: 'Japan',
+        flag: '🇯🇵',
+        specialty: 'Precision & Mastery',
+        description: 'Navigate perfectionism, hierarchy, and disciplined excellence',
+        pressures: ['Strict standards', 'Hierarchy tension', 'Discipline fatigue'],
+        learns: ['Precision', 'Process excellence', 'Role clarity'],
+        startingBonus: { readiness: 10 },
+        modifiers: {
+          skill_gain: 1.2,
+          conflict_chance: 0.7,
+          fatigue_gain: 1.3
+        },
+        rubric_bias: {
+          taste: 1.05,
+          technique: 1.2,
+          workflow: 1.1,
+          hygiene: 1.15,
+          presentation: 1.1,
+          timing: 1.05
+        }
+      },
+      {
+        id: 'FR',
+        name: 'France',
+        flag: '🇫🇷',
+        specialty: 'Classical Foundations',
+        description: 'Balance tradition, critique culture, and brigade structure',
+        pressures: ['Critique intensity', 'Tradition vs innovation', 'Status hierarchy'],
+        learns: ['Fundamentals', 'Feedback resilience', 'Classical technique'],
+        startingBonus: { reputation: 5 },
+        modifiers: {
+          reputation_gain: 1.15,
+          conflict_chance: 1.1,
+          training_efficiency: 1.1
+        },
+        rubric_bias: {
+          taste: 1.1,
+          technique: 1.15,
+          workflow: 0.95,
+          hygiene: 1.05,
+          presentation: 1.1,
+          timing: 0.95
+        }
+      },
+      {
+        id: 'US',
+        name: 'USA',
+        flag: '🇺🇸',
+        specialty: 'Innovation & Brand',
+        description: 'Navigate media pressure, big personalities, and rapid innovation',
+        pressures: ['Media expectations', 'Personality clashes', 'Sponsorship optics'],
+        learns: ['Innovation', 'Leadership under spotlight', 'Brand building'],
+        startingBonus: { budget: 700, morale: 10 },
+        modifiers: {
+          sponsor_difficulty: 0.6,
+          conflict_chance: 1.2,
+          innovation_bonus: 1.3
+        },
+        rubric_bias: {
+          taste: 1.0,
+          technique: 0.9,
+          workflow: 1.05,
+          hygiene: 0.95,
+          presentation: 1.15,
+          timing: 1.0
+        }
+      }
+    ];
+  }
+  
+  initializeArchetypes() {
+    return [
+      {
+        id: 'prodigy',
+        name: 'The Prodigy',
+        description: 'High potential, volatile personality',
+        baseSkills: { technical: 70, creativity: 85, speed: 75, consistency: 60 },
+        traits: { ego: 8, patience: 4, ambition: 9, teamwork: 5 },
+        volatility: 'high',
+        conflictTags: ['ego', 'impatience']
+      },
+      {
+        id: 'rock',
+        name: 'The Rock',
+        description: 'Reliable, consistent, team player',
+        baseSkills: { technical: 65, creativity: 60, speed: 60, consistency: 85 },
+        traits: { ego: 3, patience: 8, ambition: 5, teamwork: 9 },
+        volatility: 'low',
+        conflictTags: []
+      },
+      {
+        id: 'artist',
+        name: 'The Artist',
+        description: 'Creative genius, dislikes structure',
+        baseSkills: { technical: 60, creativity: 90, speed: 55, consistency: 50 },
+        traits: { ego: 7, patience: 6, ambition: 7, teamwork: 4 },
+        volatility: 'medium',
+        conflictTags: ['creativity', 'structure_resistance']
+      },
+      {
+        id: 'classicist',
+        name: 'The Classicist',
+        description: 'Traditional technique, critique-heavy',
+        baseSkills: { technical: 85, creativity: 55, speed: 65, consistency: 80 },
+        traits: { ego: 6, patience: 7, ambition: 6, teamwork: 6 },
+        volatility: 'low',
+        conflictTags: ['tradition', 'critical']
+      },
+      {
+        id: 'grinder',
+        name: 'The Grinder',
+        description: 'Works long hours, fatigue risk',
+        baseSkills: { technical: 70, creativity: 60, speed: 80, consistency: 75 },
+        traits: { ego: 4, patience: 9, ambition: 8, teamwork: 7 },
+        volatility: 'low',
+        conflictTags: ['burnout_prone']
+      },
+      {
+        id: 'influencer',
+        name: 'The Influencer',
+        description: 'Brand power, reputation boost, ego risk',
+        baseSkills: { technical: 60, creativity: 75, speed: 70, consistency: 60 },
+        traits: { ego: 9, patience: 5, ambition: 9, teamwork: 5 },
+        volatility: 'high',
+        conflictTags: ['ego', 'media_focus']
+      }
+    ];
+  }
+  
+  initializeMissions() {
+    // Simplified mission structure for MVP
+    return {
+      CH1: [
+        {
+          id: 'ch1_tryouts',
+          title: 'Team Tryouts',
+          chapter: 1,
+          week: 1,
+          intro: [
+            'Welcome to your culinary journey. This season, you\'ll build a team and compete for glory.',
+            'Your first challenge: evaluate potential team members and make tough choices.'
+          ],
+          choices: [
+            {
+              id: 'expand_roster',
+              label: 'Hold open tryouts - recruit 2 more members',
+              checks: [{ stat: 'team.budget', difficulty: 800 }],
+              outcomes: {
+                success: {
+                  text: 'You found two talented candidates! Your team is taking shape.',
+                  effects: [
+                    { op: 'inc', path: 'team.budget', value: -800 },
+                    { op: 'inc', path: 'team.cohesion', value: 5 },
+                    { op: 'set_flag', value: 'EXPANDED_ROSTER' }
+                  ]
+                },
+                fail: {
+                  text: 'Not enough budget for full tryouts. You make do with limited interviews.',
+                  effects: [
+                    { op: 'inc', path: 'team.morale', value: -5 }
+                  ]
+                }
+              }
+            },
+            {
+              id: 'focus_core',
+              label: 'Focus on core team - intensive training instead',
+              checks: [],
+              outcomes: {
+                success: {
+                  text: 'Your small team bonds through intensive training. Quality over quantity.',
+                  effects: [
+                    { op: 'inc', path: 'team.cohesion', value: 10 },
+                    { op: 'inc', path: 'team.readiness', value: 5 },
+                    { op: 'inc', path: 'team.fatigue', value: 8 },
+                    { op: 'set_flag', value: 'CORE_FOCUS' }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          id: 'ch1_funding',
+          title: 'Funding Reality',
+          chapter: 1,
+          week: 2,
+          intro: [
+            'Competition entry fees, equipment, ingredients... everything costs money.',
+            'You need to secure funding or risk starting at a disadvantage.'
+          ],
+          choices: [
+            {
+              id: 'sponsor_pitch',
+              label: 'Pitch to local sponsors',
+              checks: [{ stat: 'team.reputation', difficulty: 15 }],
+              outcomes: {
+                success: {
+                  text: 'Your pitch succeeds! A local restaurant group offers support.',
+                  effects: [
+                    { op: 'inc', path: 'team.budget', value: 1500 },
+                    { op: 'inc', path: 'team.reputation', value: 5 },
+                    { op: 'set_flag', value: 'SPONSOR_SECURED' }
+                  ]
+                },
+                fail: {
+                  text: 'Sponsors pass this time. You\'ll need to prove yourself first.',
+                  effects: [
+                    { op: 'inc', path: 'team.morale', value: -5 }
+                  ]
+                }
+              }
+            },
+            {
+              id: 'fundraiser',
+              label: 'Organize community fundraiser dinner',
+              checks: [],
+              outcomes: {
+                success: {
+                  text: 'The community event is a success! Modest funds raised and goodwill built.',
+                  effects: [
+                    { op: 'inc', path: 'team.budget', value: 600 },
+                    { op: 'inc', path: 'team.cohesion', value: 8 },
+                    { op: 'inc', path: 'team.fatigue', value: 10 },
+                    { op: 'inc', path: 'team.reputation', value: 3 }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      CH2: [
+        {
+          id: 'ch2_training',
+          title: 'Training Camp',
+          chapter: 2,
+          week: 3,
+          intro: [
+            'Your first competition is approaching. Time to sharpen skills.',
+            'How will you prepare your team?'
+          ],
+          choices: [
+            {
+              id: 'intensive_drills',
+              label: 'Run intensive knife skills and technique drills',
+              checks: [],
+              outcomes: {
+                success: {
+                  text: 'Brutal but effective. Technical skills improve significantly.',
+                  effects: [
+                    { op: 'inc', path: 'team.readiness', value: 15 },
+                    { op: 'inc', path: 'team.fatigue', value: 15 },
+                    { op: 'inc', path: 'team.morale', value: -3 }
+                  ]
+                }
+              }
+            },
+            {
+              id: 'mock_service',
+              label: 'Practice mock service - build workflow and timing',
+              checks: [],
+              outcomes: {
+                success: {
+                  text: 'The team finds their rhythm. Workflow improves, confidence builds.',
+                  effects: [
+                    { op: 'inc', path: 'team.readiness', value: 12 },
+                    { op: 'inc', path: 'team.cohesion', value: 8 },
+                    { op: 'inc', path: 'team.fatigue', value: 10 },
+                    { op: 'inc', path: 'team.workflow_bonus', value: 5 }
+                  ]
+                }
+              }
+            },
+            {
+              id: 'balanced',
+              label: 'Balanced approach - mix training with rest',
+              checks: [],
+              outcomes: {
+                success: {
+                  text: 'Steady progress without burnout. The team feels prepared.',
+                  effects: [
+                    { op: 'inc', path: 'team.readiness', value: 8 },
+                    { op: 'inc', path: 'team.morale', value: 5 },
+                    { op: 'inc', path: 'team.fatigue', value: 5 }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          id: 'ch2_conflict',
+          title: 'First Conflict',
+          chapter: 2,
+          week: 4,
+          requirements: { min_team_size: 3 },
+          intro: [
+            'Tension erupts in the kitchen. Two team members clash over plating style.',
+            'How you handle this will set the tone for your team culture.'
+          ],
+          choices: [
+            {
+              id: 'mediate',
+              label: 'Mediate the conflict - find common ground',
+              checks: [],
+              outcomes: {
+                success: {
+                  text: 'You facilitate a productive conversation. Respect grows.',
+                  effects: [
+                    { op: 'inc', path: 'team.cohesion', value: 12 },
+                    { op: 'inc', path: 'team.morale', value: 5 },
+                    { op: 'inc', path: 'team.risk', value: -5 },
+                    { op: 'set_flag', value: 'CONFLICT_RESOLVED' }
+                  ]
+                }
+              }
+            },
+            {
+              id: 'assert',
+              label: 'Assert your authority - make the call yourself',
+              checks: [],
+              outcomes: {
+                success: {
+                  text: 'Your decisive leadership ends the debate. But at what cost?',
+                  effects: [
+                    { op: 'inc', path: 'team.morale', value: -5 },
+                    { op: 'inc', path: 'team.cohesion', value: -3 },
+                    { op: 'inc', path: 'team.workflow_bonus', value: 3 },
+                    { op: 'set_flag', value: 'AUTHORITATIVE_STYLE' }
+                  ]
+                }
+              }
+            },
+            {
+              id: 'ignore',
+              label: 'Let them work it out - focus on prep',
+              checks: [],
+              outcomes: {
+                success: {
+                  text: 'The tension lingers unresolved. This could be a problem later.',
+                  effects: [
+                    { op: 'inc', path: 'team.cohesion', value: -8 },
+                    { op: 'inc', path: 'team.risk', value: 10 },
+                    { op: 'set_flag', value: 'UNRESOLVED_CONFLICT' }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    };
+  }
+  
+  initializeCompetitions() {
+    return [
+      {
+        id: 'local_qual_1',
+        name: 'Local Qualifier #1',
+        type: 'local',
+        week: 5,
+        format: 'solo_live_cooking',
+        team_size: 2,
+        entry_fee: 300,
+        prize: { first: 1000, second: 500, third: 250 },
+        gates: { min_reputation: 5 },
+        stakes: {
+          reputation_gain_win: 10,
+          reputation_loss_bad: -5,
+          morale_impact: 'high'
+        }
+      },
+      {
+        id: 'regional_showcase',
+        name: 'Regional Showcase',
+        type: 'regional',
+        week: 8,
+        format: 'team_hot_kitchen',
+        team_size: 3,
+        entry_fee: 800,
+        prize: { first: 3000, second: 1500, third: 750 },
+        gates: { min_reputation: 15, min_team_size: 3 },
+        stakes: {
+          reputation_gain_win: 20,
+          reputation_loss_bad: -10,
+          morale_impact: 'high'
+        }
+      },
+      {
+        id: 'national_final',
+        name: 'National Championship',
+        type: 'national',
+        week: 12,
+        format: 'team_relay',
+        team_size: 4,
+        entry_fee: 1500,
+        prize: { first: 8000, second: 4000, third: 2000 },
+        gates: { min_reputation: 30, requires_medal: true },
+        stakes: {
+          reputation_gain_win: 40,
+          reputation_loss_bad: -15,
+          morale_impact: 'critical'
+        }
+      }
+      ,
+      {
+        id: 'bocuse_trials',
+        name: 'Bocuse d\'Or Trials (National)',
+        type: 'bocuse',
+        week: 14,
+        format: 'bocuse_duo',
+        team_size: 2,
+        entry_fee: 2500,
+        prize: { first: 12000, second: 6000, third: 3000 },
+        gates: { min_reputation: 35, min_team_size: 2 },
+        stakes: { reputation_gain_win: 55, reputation_loss_bad: -20, morale_impact: 'high' }
+      },
+      {
+        id: 'worldcup_qualifier',
+        name: 'Culinary World Cup Qualifier',
+        type: 'worldcup',
+        week: 16,
+        format: 'worldcup_multi',
+        team_size: 6,
+        entry_fee: 6000,
+        prize: { first: 30000, second: 15000, third: 8000 },
+        gates: { min_reputation: 45, min_team_size: 5 },
+        stakes: { reputation_gain_win: 80, reputation_loss_bad: -30, morale_impact: 'high' }
+      },
+      {
+        id: 'olympics_selection_camp',
+        name: 'Culinary Olympics Selection Camp',
+        type: 'olympics',
+        week: 18,
+        format: 'team_hot_kitchen',
+        team_size: 4,
+        entry_fee: 4500,
+        prize: { first: 0, second: 0, third: 0 },
+        gates: { min_reputation: 50, min_team_size: 4 },
+        stakes: { reputation_gain_win: 35, reputation_loss_bad: -15, morale_impact: 'medium' }
+      },
+      {
+        id: 'culinary_olympics',
+        name: 'Culinary Olympics (IKA)',
+        type: 'olympics',
+        week: 20,
+        format: 'olympics_multi',
+        team_size: 8,
+        entry_fee: 12000,
+        prize: { first: 80000, second: 40000, third: 20000 },
+        gates: { min_reputation: 60, min_team_size: 6 },
+        stakes: { reputation_gain_win: 120, reputation_loss_bad: -45, morale_impact: 'very_high' }
+      }
+
+    
+    ];
+  }
+  
+  // Core game logic
+  applyEffect(effect) {
+    if (!effect || !effect.op) return;
+    
+    if (effect.op === 'inc') {
+      const keys = effect.path.split('.');
+      let obj = this.state;
+      for (let i = 0; i < keys.length - 1; i++) {
+        obj = obj[keys[i]];
+      }
+      const lastKey = keys[keys.length - 1];
+      obj[lastKey] = (obj[lastKey] || 0) + (effect.value || 0);
+      
+      // Apply bounds
+      if (effect.path.includes('morale')) obj[lastKey] = Math.max(0, Math.min(100, obj[lastKey]));
+      if (effect.path.includes('cohesion')) obj[lastKey] = Math.max(0, Math.min(100, obj[lastKey]));
+      if (effect.path.includes('fatigue')) obj[lastKey] = Math.max(0, Math.min(100, obj[lastKey]));
+      if (effect.path.includes('reputation')) obj[lastKey] = Math.max(0, obj[lastKey]);
+    }
+    
+    if (effect.op === 'set') {
+      const keys = effect.path.split('.');
+      let obj = this.state;
+      for (let i = 0; i < keys.length - 1; i++) {
+        obj = obj[keys[i]];
+      }
+      obj[keys[keys.length - 1]] = effect.value;
+    }
+    
+    if (effect.op === 'set_flag') {
+      this.state.flags.add(effect.value);
+    }
+    
+    if (effect.op === 'clear_flag') {
+      this.state.flags.delete(effect.value);
+    }
+  }
+  
+  selectCountry(country) {
+    this.state.country = country;
+    this.state.team.budget += country.startingBonus.budget || 0;
+    this.state.team.reputation += country.startingBonus.reputation || 0;
+    this.state.team.readiness += country.startingBonus.readiness || 0;
+    this.state.team.morale += country.startingBonus.morale || 0;
+    
+    this.state.screen = 'team_draft';
+    this.render();
+  }
+  
+  draftTeam(selectedArchetypes) {
+    this.state.members = selectedArchetypes.map((arch, idx) => ({
+      id: `member_${idx}`,
+      name: this.generateName(),
+      archetype: arch.id,
+      archetypeName: arch.name,
+      skills: { ...arch.baseSkills },
+      traits: { ...arch.traits },
+      morale: 60 + Math.floor(Math.random() * 20),
+      fatigue: 0,
+      relationships: {}
+    }));
+    
+    // Initialize relationships
+    for (let i = 0; i < this.state.members.length; i++) {
+      for (let j = i + 1; j < this.state.members.length; j++) {
+        const a = this.state.members[i];
+        const b = this.state.members[j];
+        const compatibility = (a.traits.teamwork + b.traits.teamwork) / 2 - 5;
+        const baseRel = 50 + compatibility * 5 + (Math.random() * 20 - 10);
+        a.relationships[b.id] = Math.round(baseRel);
+        b.relationships[a.id] = Math.round(baseRel);
+      }
+    }
+    
+    this.state.screen = 'story';
+    this.loadNextMission();
+    this.render();
+  }
+  
+  generateName() {
+    const firsts = ['Alex', 'Jordan', 'Sam', 'Casey', 'Riley', 'Morgan', 'Taylor', 'Drew', 'Quinn', 'Avery'];
+    const lasts = ['Chen', 'Smith', 'Garcia', 'Patel', 'Kim', 'Lopez', 'Brown', 'Wilson', 'Martinez', 'Lee'];
+    return `${firsts[Math.floor(Math.random() * firsts.length)]} ${lasts[Math.floor(Math.random() * lasts.length)]}`;
+  }
+  
+  loadNextMission() {
+    const chapter = `CH${this.state.chapter}`;
+    const missions = this.missions[chapter] || [];
+    
+    for (const mission of missions) {
+      if (this.state.completedMissions.includes(mission.id)) continue;
+      if (mission.week && mission.week > this.state.week) continue;
+      
+      // Check requirements
+      const req = mission.requirements || {};
+      if (req.min_reputation && this.state.team.reputation < req.min_reputation) continue;
+      if (req.min_team_size && this.state.members.length < req.min_team_size) continue;
+      
+      this.state.currentMission = mission;
+      return;
+    }
+    
+    // No more missions this chapter - check for competition
+    this.checkForCompetition();
+  }
+  
+  checkForCompetition() {
+    const comp = this.competitions.find(c => c.week === this.state.week);
+    if (comp) {
+      this.state.upcomingCompetition = comp;
+      this.state.screen = 'competition';
+    } else if (this.state.week >= this.state.totalWeeks) {
+      this.state.screen = 'season_end';
+    } else {
+      // Advance week
+      this.advanceWeek();
+    }
+  }
+  
+  makeChoice(choice) {
+    const mission = this.state.currentMission;
+    if (!mission) return;
+    
+    let outcome = choice.outcomes.success;
+    
+    // Check if there's a stat check
+    if (choice.checks && choice.checks.length > 0) {
+      const check = choice.checks[0];
+      const keys = check.stat.split('.');
+      let statValue = this.state;
+      for (const key of keys) {
+        statValue = statValue[key];
+      }
+      
+      const roll = Math.floor(Math.random() * 20) + 1;
+      const total = (statValue || 0) + roll;
+      
+      if (total < check.difficulty) {
+        outcome = choice.outcomes.fail || choice.outcomes.success;
+      }
+    }
+    
+    // Apply effects
+    if (outcome.effects) {
+      outcome.effects.forEach(e => this.applyEffect(e));
+    }
+    
+    // Mark mission complete
+    this.state.completedMissions.push(mission.id);
+    
+    // Show result temporarily
+    this.state.lastOutcome = outcome.text;
+    this.render();
+    
+    setTimeout(() => {
+      this.state.lastOutcome = null;
+      this.loadNextMission();
+      this.render();
+    }, 2000);
+  }
+  
+  advanceWeek() {
+    this.state.week++;
+    
+    // Weekly recovery/costs
+    this.state.team.fatigue = Math.max(0, this.state.team.fatigue - 10);
+    this.state.team.budget -= 200; // Weekly costs
+    
+    // Update readiness
+    this.updateReadiness();
+    
+    this.loadNextMission();
+    this.render();
+  }
+  
+  updateReadiness() {
+    const t = this.state.team;
+    const avgSkill = this.state.members.length > 0
+      ? this.state.members.reduce((sum, m) => {
+          return sum + (m.skills.technical + m.skills.creativity + m.skills.speed + m.skills.consistency) / 4;
+        }, 0) / this.state.members.length
+      : 50;
+    
+    const readiness = avgSkill * 0.5
+                    + t.morale * 0.15
+                    + t.cohesion * 0.15
+                    + t.reputation * 0.1
+                    - t.fatigue * 0.25
+                    - t.risk * 0.1
+                    + t.workflow_bonus;
+    
+    this.state.team.readiness = Math.max(0, Math.min(100, Math.round(readiness)));
+  }
+  
+  enterCompetition() {
+    const comp = this.state.upcomingCompetition;
+    if (!comp) return;
+    
+    // Check eligibility
+    if (this.state.team.budget < comp.entry_fee) {
+      alert('Insufficient budget!');
+      return;
+    }
+    
+    if (comp.gates.min_reputation && this.state.team.reputation < comp.gates.min_reputation) {
+      alert('Reputation too low!');
+      return;
+    }
+    
+    if (comp.gates.requires_medal && this.state.medals.gold === 0 && this.state.medals.silver === 0 && this.state.medals.bronze === 0) {
+      alert('Need at least one medal to enter!');
+      return;
+    }
+    
+    // Pay entry fee
+    this.state.team.budget -= comp.entry_fee;
+
+    // Hot Kitchen Mode (interactive)
+    if (comp.format === 'team_hot_kitchen') {
+      this.startHotKitchen(comp);
+      return;
+    }
+
+    // Simulate competition (non-interactive)
+
+    const result = this.simulateCompetition(comp);
+    this.applyCompetitionOutcome(comp, result);
+    
+    // Apply results
+    if (result.placement === 1) {
+      this.state.medals.gold++;
+      this.state.team.budget += comp.prize.first;
+      this.state.team.reputation += comp.stakes.reputation_gain_win;
+      this.state.team.morale = Math.min(100, this.state.team.morale + 15);
+    } else if (result.placement === 2) {
+      this.state.medals.silver++;
+      this.state.team.budget += comp.prize.second;
+      this.state.team.reputation += Math.floor(comp.stakes.reputation_gain_win * 0.6);
+      this.state.team.morale = Math.min(100, this.state.team.morale + 10);
+    } else if (result.placement === 3) {
+      this.state.medals.bronze++;
+      this.state.team.budget += comp.prize.third;
+      this.state.team.reputation += Math.floor(comp.stakes.reputation_gain_win * 0.4);
+      this.state.team.morale = Math.min(100, this.state.team.morale + 8);
+    } else if (result.placement > 10) {
+      this.state.team.reputation += comp.stakes.reputation_loss_bad;
+      this.state.team.morale = Math.max(0, this.state.team.morale - 10);
+    }
+    
+    // Fatigue from competition
+    this.state.team.fatigue = Math.min(100, this.state.team.fatigue + 15);
+    
+    this.render();
+  }
+  
+
+  applyCompetitionOutcome(comp, result) {
+    this.state.competitionResult = result;
+    this.state.totalCompetitions++;
+
+    // Apply medals + prizes + reputation
+    if (result.placement === 1) {
+      this.state.medals.gold++;
+      this.state.team.budget += comp.prize.first;
+      this.state.team.reputation += comp.stakes.reputation_gain_win;
+      this.state.team.morale = Math.min(100, this.state.team.morale + 15);
+    } else if (result.placement === 2) {
+      this.state.medals.silver++;
+      this.state.team.budget += comp.prize.second;
+      this.state.team.reputation += Math.floor(comp.stakes.reputation_gain_win * 0.6);
+      this.state.team.morale = Math.min(100, this.state.team.morale + 10);
+    } else if (result.placement === 3) {
+      this.state.medals.bronze++;
+      this.state.team.budget += comp.prize.third;
+      this.state.team.reputation += Math.floor(comp.stakes.reputation_gain_win * 0.4);
+      this.state.team.morale = Math.min(100, this.state.team.morale + 8);
+    } else if (result.placement > 10) {
+      this.state.team.reputation = Math.max(0, this.state.team.reputation + (comp.stakes.reputation_loss_bad || -5));
+      this.state.team.morale = Math.max(0, this.state.team.morale - 10);
+    }
+
+    // Competition-day fatigue
+    this.state.team.fatigue = Math.min(100, this.state.team.fatigue + (result.hotKitchen ? 18 : 15));
+
+    // Achievements (reuse existing)
+    this.checkAchievements(comp, result);
+  }
+
+  continueAfterCompetition() {
+    this.state.upcomingCompetition = null;
+    this.state.competitionResult = null;
+    
+    if (this.state.week >= this.state.totalWeeks) {
+      this.endSeason();
+    } else {
+      this.advanceWeek();
+    }
+  }
+  
+  endSeason() {
+    // Calculate season score
+    const seasonScore = {
+      medals: this.state.medals.gold * 1000 + this.state.medals.silver * 500 + this.state.medals.bronze * 250,
+      reputation: this.state.team.reputation * 50,
+      budget: Math.max(0, this.state.team.budget),
+      total: 0
+    };
+    seasonScore.total = seasonScore.medals + seasonScore.reputation + Math.floor(seasonScore.budget / 10);
+    
+    this.state.seasonHistory.push({
+      season: this.state.season,
+      score: seasonScore.total,
+      medals: { ...this.state.medals },
+      reputation: this.state.team.reputation
+    });
+    
+    this.state.screen = 'season_end';
+    this.state.seasonScore = seasonScore;
+    this.render();
+  }
+  
+  startNewSeason() {
+    this.state.season++;
+    this.state.week = 1;
+    this.state.chapter = 1;
+    this.state.completedMissions = [];
+    this.state.medals = { gold: 0, silver: 0, bronze: 0 };
+    
+    // Carry over some state
+    // Budget, reputation, team members persist
+    
+    this.state.screen = 'story';
+    this.loadNextMission();
+    this.render();
+  }
+  
+  // Rendering
+  
+  // ---------- Competition Day: Hot Kitchen Mode (Competition Service) ----------
+  startHotKitchen(comp) {
+    // Initialize interactive hot kitchen state
+    const members = this.state.members || [];
+    const pickBest = (station) => {
+      if (!members.length) return null;
+      const score = (m) => {
+        const s = m.skills || {};
+        if (station === 'pass') return (s.teamwork + s.consistency) / 2;
+        if (station === 'protein') return (s.technique + s.speed) / 2;
+        if (station === 'sauce') return (s.technique + s.consistency) / 2;
+        if (station === 'garnish') return (s.creativity + s.speed) / 2;
+        return (s.speed + s.consistency) / 2;
+      };
+      return members.slice().sort((a,b)=>score(b)-score(a))[0]?.id || null;
+    };
+
+    const duration = 180;
+    const phases = [
+      { id:'brief', name:'Briefing', minutes: 10 },
+      { id:'mise', name:'Mise en place', minutes: 45 },
+      { id:'cook', name:'Cook Window', minutes: 95 },
+      { id:'plate', name:'Plating & Pass', minutes: 30 }
+    ];
+
+    // Baseline criteria (0-10) from team state
+    const t = this.state.team;
+    const base = {
+      taste: Math.max(0, Math.min(10, 5 + t.readiness/28 + t.morale/45 - t.fatigue/55)),
+      technique: Math.max(0, Math.min(10, 5 + t.reputation/18 + t.readiness/30)),
+      workflow: Math.max(0, Math.min(10, 5 + t.cohesion/26 + t.workflow_bonus/4 - t.fatigue/80)),
+      hygiene: Math.max(0, Math.min(10, 5 + (100-t.fatigue)/70)),
+      presentation: Math.max(0, Math.min(10, 5 + t.reputation/24 + t.readiness/40)),
+      timing: Math.max(0, Math.min(10, 5 + t.cohesion/70 - t.fatigue/70))
+    };
+
+    const bias = (this.state.country?.rubric_bias) || { taste:1, technique:1, workflow:1, hygiene:1, presentation:1, timing:1 };
+    Object.keys(base).forEach(k => base[k] = Math.max(0, Math.min(10, base[k] * (bias[k] || 1))));
+
+    // Stations + task list (with dependencies)
+    const tasks = this.getHotKitchenTasks();
+    const stations = ['pass','protein','sauce','garnish'];
+
+    const buildTaskState = () => {
+      const byId = {};
+      tasks.forEach(tk => { byId[tk.id] = { ...tk, done:false }; });
+      return byId;
+    };
+
+    const taskState = buildTaskState();
+
+    // Ticket rail (competition service = waves)
+    // 4 judge plates due at 150m, 4 display plates due at 180m
+    const tickets = [];
+    for (let i=1;i<=4;i++){
+      tickets.push({ id:`J${i}`, label:`Judge Plate ${i}`, dueAt:150, status:'pending', sentAt:null, requires:['pass_plate_map','protein_cook','sauce_finish','garnish_ready','pass_wipe_discipline'] });
+    }
+    for (let i=1;i<=4;i++){
+      tickets.push({ id:`D${i}`, label:`Display Plate ${i}`, dueAt:180, status:'pending', sentAt:null, requires:['pass_plate_map','protein_cook','sauce_finish','garnish_ready','pass_wipe_discipline'] });
+    }
+
+    this.state.hotKitchen = {
+      compId: comp.id,
+      compName: comp.name,
+      duration,
+      phases,
+      phaseIndex: 0,
+      timeElapsed: 0,
+      timeLeft: duration,
+      focus: 3,
+      pressure: 20,
+      cleanliness: 85,
+      comms: 75,
+      riskMeter: Math.max(0, Math.min(100, (t.risk || 0) * 10)),
+      assignments: {
+        pass: pickBest('pass'),
+        protein: pickBest('protein'),
+        sauce: pickBest('sauce'),
+        garnish: pickBest('garnish')
+      },
+      taskState,
+      tickets,
+      incident: null,
+      baseCriteria: base,
+      delta: { taste:0, technique:0, workflow:0, hygiene:0, presentation:0, timing:0 },
+      penalties: [],
+      log: [],
+      actionLog: []
+    };
+
+    this.state.screen = 'hot_kitchen';
+    this.render();
+  }
+
+  getHotKitchenTasks() {
+    // Keep it readable + coachable. Each task has time cost + effects.
+    return [
+      // PASS / CAPTAIN
+      { id:'pass_plate_map', station:'pass', label:'Plate Map + Fire Plan', minutes:8, prereq:[], effects:{ workflow:+0.4, timing:+0.3, pressure:-6 } },
+      { id:'pass_station_setup', station:'pass', label:'Set Pass + Garnish Staging', minutes:6, prereq:['pass_plate_map'], effects:{ workflow:+0.3, presentation:+0.2, cleanliness:+4 } },
+      { id:'pass_comms_brief', station:'pass', label:'Comms Brief (short calls)', minutes:5, prereq:[], effects:{ workflow:+0.3, pressure:-4, comms:+8 } },
+      { id:'pass_wipe_discipline', station:'pass', label:'Wipe Discipline (cloths + towels)', minutes:4, prereq:[], effects:{ hygiene:+0.5, cleanliness:+10 } },
+      { id:'pass_qc_round', station:'pass', label:'QC Round (taste + temp checks)', minutes:6, prereq:['pass_plate_map'], effects:{ taste:+0.4, technique:+0.2, pressure:-3 } },
+
+      // PROTEIN
+      { id:'protein_trim', station:'protein', label:'Trim + Portion Protein', minutes:10, prereq:[], effects:{ technique:+0.3, hygiene:+0.2, cleanliness:+2 } },
+      { id:'protein_sear', station:'protein', label:'Sear / Mark Protein', minutes:10, prereq:['protein_trim'], effects:{ technique:+0.4, pressure:+4 } },
+      { id:'protein_roast', station:'protein', label:'Roast / Finish Protein', minutes:18, prereq:['protein_sear'], effects:{ technique:+0.5, timing:+0.2, pressure:+6 } },
+      { id:'protein_rest', station:'protein', label:'Rest + Glaze', minutes:8, prereq:['protein_roast'], effects:{ taste:+0.4, presentation:+0.2, pressure:-2 } },
+      { id:'protein_cook', station:'protein', label:'Carve + Portion', minutes:8, prereq:['protein_rest'], effects:{ timing:+0.4, presentation:+0.2 } },
+
+      // SAUCE
+      { id:'sauce_reduction', station:'sauce', label:'Base Reduction', minutes:14, prereq:[], effects:{ technique:+0.3, pressure:+4 } },
+      { id:'sauce_emulsion', station:'sauce', label:'Emulsion / Mounting Plan', minutes:8, prereq:['sauce_reduction'], effects:{ technique:+0.4, taste:+0.2 } },
+      { id:'sauce_season', station:'sauce', label:'Season + Balance', minutes:6, prereq:['sauce_emulsion'], effects:{ taste:+0.5, workflow:+0.1 } },
+      { id:'sauce_finish', station:'sauce', label:'Finish Sauce + Hold Hot', minutes:6, prereq:['sauce_season'], effects:{ timing:+0.2, taste:+0.2, hygiene:+0.1 } },
+
+      // GARNISH
+      { id:'garnish_prep', station:'garnish', label:'Prep Veg + Garnish', minutes:12, prereq:[], effects:{ workflow:+0.2, hygiene:+0.1 } },
+      { id:'garnish_cook', station:'garnish', label:'Cook Veg (texture)', minutes:12, prereq:['garnish_prep'], effects:{ taste:+0.3, technique:+0.2, pressure:+3 } },
+      { id:'garnish_puree', station:'garnish', label:'Purée / Component', minutes:10, prereq:['garnish_prep'], effects:{ taste:+0.2, presentation:+0.2 } },
+      { id:'garnish_crisp', station:'garnish', label:'Crisp / Crunch Element', minutes:8, prereq:['garnish_prep'], effects:{ presentation:+0.4, taste:+0.2 } },
+      { id:'garnish_ready', station:'garnish', label:'Final Garnish Ready (staging)', minutes:6, prereq:['garnish_cook','garnish_puree'], effects:{ workflow:+0.2, timing:+0.2 } },
+    ];
+  }
+
+  hkMemberById(id) {
+    return (this.state.members || []).find(m => m.id === id);
+  }
+
+  hkStationSkill(station) {
+    const m = this.hkMemberById(this.state.hotKitchen.assignments[station]);
+    if (!m) return 5;
+    const s = m.skills || {};
+    if (station === 'pass') return (s.teamwork + s.consistency) / 2;
+    if (station === 'protein') return (s.technique + s.speed) / 2;
+    if (station === 'sauce') return (s.technique + s.consistency) / 2;
+    if (station === 'garnish') return (s.creativity + s.speed) / 2;
+    return 5;
+  }
+
+  hkRoll(station, difficulty) {
+    // station skill (0-10) mapped to modifier ~0-10, plus d20
+    const mod = Math.round(this.hkStationSkill(station));
+    const roll = Math.floor(Math.random()*20)+1;
+    const total = roll + mod;
+    return { roll, mod, total, success: total >= difficulty };
+  }
+
+  hkAdvance(minutes) {
+    const hk = this.state.hotKitchen;
+    hk.timeElapsed = Math.min(hk.duration, hk.timeElapsed + minutes);
+    hk.timeLeft = Math.max(0, hk.duration - hk.timeElapsed);
+
+    // Phase tracking
+    let t = hk.timeElapsed;
+    let cum = 0;
+    let idx = 0;
+    for (let i=0;i<hk.phases.length;i++){
+      cum += hk.phases[i].minutes;
+      if (t <= cum) { idx = i; break; }
+      idx = i;
+    }
+    hk.phaseIndex = idx;
+
+    // Pressure naturally rises as time burns
+    hk.pressure = Math.max(0, Math.min(100, hk.pressure + (minutes * 0.35)));
+    // Cleanliness decays unless maintained
+    hk.cleanliness = Math.max(0, Math.min(100, hk.cleanliness - (minutes * 0.25)));
+    // Comms decays under pressure
+    hk.comms = Math.max(0, Math.min(100, hk.comms - (minutes * 0.12)));
+
+    // Behind-schedule bonus pressure: if tasks incomplete late in day
+    const required = ['pass_plate_map','protein_cook','sauce_finish','garnish_ready'];
+    const doneCount = required.filter(id => hk.taskState[id]?.done).length;
+    if (hk.timeElapsed > 120 && doneCount < 3) hk.pressure = Math.min(100, hk.pressure + 8);
+
+    this.hkMaybeIncident();
+  }
+
+  hkApplyEffects(effects) {
+    const hk = this.state.hotKitchen;
+    const d = hk.delta;
+
+    // Criteria deltas
+    for (const k of ['taste','technique','workflow','hygiene','presentation','timing']) {
+      if (effects[k]) d[k] += effects[k];
+    }
+
+    // Meters
+    if (effects.pressure) hk.pressure = Math.max(0, Math.min(100, hk.pressure + effects.pressure));
+    if (effects.cleanliness) hk.cleanliness = Math.max(0, Math.min(100, hk.cleanliness + effects.cleanliness));
+    if (effects.comms) hk.comms = Math.max(0, Math.min(100, hk.comms + effects.comms));
+  }
+
+  hkDoTask(taskId) {
+    const hk = this.state.hotKitchen;
+    if (!hk || hk.incident) return;
+
+    const t = hk.taskState[taskId];
+    if (!t || t.done) return;
+
+    // Check prerequisites
+    const prereq = t.prereq || [];
+    const missing = prereq.filter(pid => !hk.taskState[pid]?.done);
+    if (missing.length) {
+      hk.log.push(`⛔ Can't do "${t.label}" yet. Missing: ${missing.map(x=>hk.taskState[x]?.label||x).join(', ')}`);
+      this.render();
+      return;
+    }
+
+    // Skill check (optional): harder tasks can fail under pressure
+    const baseDiff = 16;
+    const diff = baseDiff + Math.floor((hk.pressure-40)/15);
+    const station = t.station;
+    const check = this.hkRoll(station, diff);
+
+    // Advance time regardless
+    hk.actionLog.push({ type:'task', taskId, station, minutes:t.minutes, check });
+    this.hkAdvance(t.minutes);
+
+    if (check.success) {
+      t.done = true;
+      this.hkApplyEffects(t.effects || {});
+      hk.log.push(`✅ ${t.label} (${station}) — success. (d20 ${check.roll}+${check.mod} vs ${diff})`);
+    } else {
+      // partial: time spent, small penalty, increases risk of later incidents
+      hk.pressure = Math.min(100, hk.pressure + 6);
+      hk.delta.workflow -= 0.15;
+      hk.log.push(`⚠️ ${t.label} (${station}) — sloppy under pressure. (d20 ${check.roll}+${check.mod} vs ${diff})`);
+    }
+
+    this.render();
+  }
+
+  hkSpendFocus(kind) {
+    const hk = this.state.hotKitchen;
+    if (!hk || hk.focus <= 0) return;
+
+    hk.focus -= 1;
+    if (kind === 'calm') {
+      hk.pressure = Math.max(0, hk.pressure - 18);
+      hk.comms = Math.min(100, hk.comms + 10);
+      hk.log.push('🎧 Coach intervention: calm reset + comms clarity.');
+    } else if (kind === 'clean') {
+      hk.cleanliness = Math.min(100, hk.cleanliness + 18);
+      hk.delta.hygiene += 0.25;
+      hk.log.push('🧼 Coach intervention: wipe discipline + station reset.');
+    } else if (kind === 'qc') {
+      hk.delta.taste += 0.25;
+      hk.delta.presentation += 0.15;
+      hk.log.push('👀 Coach intervention: QC round before sending plates.');
+    }
+    this.render();
+  }
+
+  hkSendTicket(ticketId) {
+    const hk = this.state.hotKitchen;
+    if (!hk || hk.incident) return;
+
+    const ticket = hk.tickets.find(t => t.id === ticketId);
+    if (!ticket || ticket.status === 'sent') return;
+
+    const missing = (ticket.requires || []).filter(id => !hk.taskState[id]?.done);
+    const now = hk.timeElapsed;
+
+    // Sending costs time (coordination)
+    this.hkAdvance(3);
+
+    if (missing.length) {
+      hk.penalties.push('missing_element');
+      hk.delta.presentation -= 0.35;
+      hk.delta.taste -= 0.25;
+      hk.log.push(`❌ Sent ${ticket.label} with missing elements. (-presentation, -taste)`);
+    }
+
+    if (now > ticket.dueAt) {
+      hk.penalties.push('late_plating');
+      hk.delta.timing -= 0.45;
+      hk.delta.workflow -= 0.15;
+      hk.log.push(`⏱️ ${ticket.label} went late. (-timing)`);
+      ticket.status = 'late';
+    } else if (now < ticket.dueAt - 8) {
+      hk.delta.timing += 0.15;
+      hk.log.push(`✅ ${ticket.label} went out early and clean. (+timing)`);
+      ticket.status = 'sent';
+    } else {
+      ticket.status = 'sent';
+      hk.log.push(`✅ ${ticket.label} sent on time.`);
+    }
+
+    ticket.sentAt = now;
+
+    // Pressure relief after sending
+    hk.pressure = Math.max(0, hk.pressure - 6);
+
+    // Auto-finish if all sent or time over
+    const allSent = hk.tickets.every(t=>t.status==='sent' || t.status==='late');
+    if (allSent || hk.timeLeft <= 0) {
+      this.hkFinalize();
+      return;
+    }
+
+    this.render();
+  }
+
+  hkMaybeIncident() {
+    const hk = this.state.hotKitchen;
+    if (!hk || hk.incident) return;
+
+    // Probability increases with pressure + low comms + risk meter
+    const p = (hk.pressure/140) + ((100-hk.comms)/220) + (hk.riskMeter/400);
+    if (Math.random() > p) return;
+
+    // Build incident deck (weight by phase)
+    const phase = hk.phases[hk.phaseIndex]?.id || 'cook';
+    const deck = this.getHotKitchenIncidents(phase);
+    const incident = deck[Math.floor(Math.random()*deck.length)];
+    if (!incident) return;
+
+    hk.incident = JSON.parse(JSON.stringify(incident)); // clone
+    hk.log.push(`🔥 INCIDENT: ${hk.incident.title}`);
+  }
+
+  getHotKitchenIncidents(phaseId) {
+    const common = [
+      {
+        id:'judge_walkby',
+        title:'Judge Walk-by',
+        desc:'A judge is observing. Your pass discipline and communication are on show.',
+        options:[
+          { id:'tight_calls', label:'Tighten calls + wipe pass', station:'pass', diff:18, onSuccess:{ workflow:+0.25, presentation:+0.2, cleanliness:+6 }, onFail:{ workflow:-0.25, pressure:+8 } },
+          { id:'ignore', label:'Ignore and keep cooking', station:'pass', diff:15, onSuccess:{}, onFail:{ presentation:-0.2, pressure:+6 } }
+        ]
+      },
+      {
+        id:'station_war',
+        title:'Station War',
+        desc:'Two chefs argue about space and timing. It’s bleeding seconds.',
+        options:[
+          { id:'mediate', label:'Captain mediates + re-assign', station:'pass', diff:19, onSuccess:{ workflow:+0.35, comms:+10, pressure:-6 }, onFail:{ workflow:-0.35, comms:-10, pressure:+10 } },
+          { id:'power_through', label:'Power through (no chat)', station:'pass', diff:16, onSuccess:{}, onFail:{ workflow:-0.2, pressure:+6 } }
+        ]
+      },
+      {
+        id:'wipe_slip',
+        title:'Dirty Cloth Moment',
+        desc:'A cloth touches the wrong surface. Cross-contamination risk spikes.',
+        options:[
+          { id:'reset', label:'Reset cloth system immediately', station:'pass', diff:17, onSuccess:{ hygiene:+0.35, cleanliness:+10, pressure:-4 }, onFail:{ hygiene:-0.6, pressure:+8 } },
+          { id:'hope', label:'Hope no one noticed', station:'pass', diff:14, onSuccess:{}, onFail:{ hygiene:-0.9, pressure:+10 } }
+        ]
+      }
+    ];
+
+    const phaseSpecific = {
+      brief: [
+        {
+          id:'brief_messy_plan',
+          title:'Unclear Plan',
+          desc:'The team looks unsure about plating order.',
+          options:[
+            { id:'diagram', label:'Draw a plate diagram', station:'pass', diff:16, onSuccess:{ workflow:+0.3, timing:+0.2, comms:+6 }, onFail:{ workflow:-0.2, pressure:+6 } },
+            { id:'wing', label:'Wing it', station:'pass', diff:12, onSuccess:{}, onFail:{ workflow:-0.3, pressure:+8 } }
+          ]
+        }
+      ],
+      mise: [
+        {
+          id:'supplier_short',
+          title:'Supplier Short',
+          desc:'A garnish arrives short. You need a backup fast.',
+          options:[
+            { id:'pivot', label:'Pivot garnish intelligently', station:'garnish', diff:18, onSuccess:{ presentation:+0.25, taste:+0.15, pressure:-4 }, onFail:{ presentation:-0.35, pressure:+8 } },
+            { id:'stretch', label:'Stretch portions (risky)', station:'garnish', diff:15, onSuccess:{}, onFail:{ presentation:-0.25, taste:-0.15 } }
+          ]
+        }
+      ],
+      cook: [
+        {
+          id:'burner_fail',
+          title:'Burner Dies',
+          desc:'A burner goes out mid-cook. Timing is threatened.',
+          options:[
+            { id:'re-route', label:'Re-route pans + keep flow', station:'protein', diff:20, onSuccess:{ timing:+0.2, workflow:+0.1, pressure:-4 }, onFail:{ timing:-0.45, pressure:+12 } },
+            { id:'wait', label:'Wait for fix', station:'protein', diff:14, onSuccess:{}, onFail:{ timing:-0.35, pressure:+10 } }
+          ]
+        },
+        {
+          id:'sauce_split',
+          title:'Sauce Splits',
+          desc:'Your emulsion looks shaky.',
+          options:[
+            { id:'save', label:'Save it (strain + re-emulsify)', station:'sauce', diff:21, onSuccess:{ taste:+0.35, technique:+0.2, pressure:-4 }, onFail:{ taste:-0.6, technique:-0.3, pressure:+10 } },
+            { id:'mask', label:'Mask with butter (risky)', station:'sauce', diff:16, onSuccess:{ taste:+0.1 }, onFail:{ taste:-0.35 } }
+          ]
+        }
+      ],
+      plate: [
+        {
+          id:'smudge',
+          title:'Plating Smudge',
+          desc:'A plate goes up with a visible smear.',
+          options:[
+            { id:'replate', label:'Re-plate cleanly', station:'pass', diff:18, onSuccess:{ presentation:+0.25, timing:-0.1, pressure:+2 }, onFail:{ presentation:-0.35, timing:-0.2 } },
+            { id:'wipe', label:'Wipe fast and send', station:'pass', diff:15, onSuccess:{ presentation:+0.05 }, onFail:{ presentation:-0.2 } }
+          ]
+        }
+      ]
+    };
+
+    return [...(phaseSpecific[phaseId] || []), ...common];
+  }
+
+  hkResolveIncident(optionId) {
+    const hk = this.state.hotKitchen;
+    if (!hk || !hk.incident) return;
+
+    const option = hk.incident.options.find(o => o.id === optionId);
+    if (!option) return;
+
+    const check = this.hkRoll(option.station, option.diff);
+    // incident takes time
+    this.hkAdvance(4);
+
+    if (check.success) {
+      this.hkApplyEffects(option.onSuccess || {});
+      hk.log.push(`✅ ${hk.incident.title}: ${option.label} succeeded. (d20 ${check.roll}+${check.mod} vs ${option.diff})`);
+    } else {
+      this.hkApplyEffects(option.onFail || {});
+      hk.log.push(`❌ ${hk.incident.title}: ${option.label} failed. (d20 ${check.roll}+${check.mod} vs ${option.diff})`);
+      // extra penalty chance
+      if (hk.cleanliness < 45 && Math.random() < 0.25) {
+        hk.penalties.push('cross_contamination');
+        hk.delta.hygiene -= 0.8;
+        hk.log.push('🚫 Hygiene warning flagged by judge. (major hit)');
+      }
+    }
+
+    hk.incident = null;
+    this.render();
+  }
+
+  hkSetAssignment(station, memberId) {
+    const hk = this.state.hotKitchen;
+    if (!hk) return;
+    hk.assignments[station] = memberId;
+    this.render();
+  }
+
+  hkFinalize() {
+    const hk = this.state.hotKitchen;
+    const comp = this.state.upcomingCompetition;
+
+    // Compute final criteria
+    const criteria = {};
+    for (const k of Object.keys(hk.baseCriteria)) {
+      let v = hk.baseCriteria[k] + hk.delta[k];
+
+      // Environment influence
+      if (k === 'hygiene') v += (hk.cleanliness - 70) / 60;
+      if (k === 'workflow') v += (hk.comms - 70) / 90;
+      if (k === 'timing') v += (100 - hk.pressure) / 180;
+
+      criteria[k] = Math.max(0, Math.min(10, v));
+    }
+
+    // Hot kitchen weights (competition service)
+    const w = { taste:0.28, technique:0.24, workflow:0.20, hygiene:0.12, presentation:0.10, timing:0.06 };
+    let score = 0;
+    Object.keys(w).forEach(k => score += criteria[k] * w[k] * 10);
+
+    // Penalty adjustments
+    const lateCount = hk.penalties.filter(p=>p==='late_plating').length;
+    const missingCount = hk.penalties.filter(p=>p==='missing_element').length;
+    const cross = hk.penalties.includes('cross_contamination');
+
+    score -= lateCount * 3;
+    score -= missingCount * 2.5;
+    if (cross) score -= 18;
+
+    score = Math.max(0, Math.min(100, score));
+
+    // Opponent field + placement
+    const field = this.generateOpponents(comp, 14);
+    const player = { name:`${this.state.country?.flag || ''} Your Team`, country:this.state.country?.name || 'You', score: score, isPlayer:true };
+    const ranked = this.rankField(field, player);
+    const placement = ranked.findIndex(x=>x.isPlayer) + 1;
+
+    const narrative = placement <= 3
+      ? "You held the pass together under pressure and delivered clean plates."
+      : placement > 10
+        ? "Small mistakes stacked up. The judges felt the inconsistency."
+        : "A solid service — not perfect, but competitive."
+
+    const commentary = this.generateCommentary(comp, { score, placement, criteria, penalties: hk.penalties, cleanliness: hk.cleanliness, comms: hk.comms });
+
+    const result = {
+      hotKitchen: true,
+      score: Math.round(score),
+      placement,
+      criteria,
+      penalties: hk.penalties,
+      narrative,
+      log: hk.log.slice(-10),
+      leaderboard: ranked.slice(0, 10),
+      commentary
+    };
+
+    this.applyCompetitionOutcome(comp, result);
+    this.state.hotKitchen = null;
+    this.state.screen = 'competition';
+    this.render();
+  }
+
+  // ---------- Opponent Field + Commentary (used for all competition results) ----------
+  generateOpponents(comp, n=12) {
+    const pools = [
+      "Northern Flame", "Copper & Salt", "Black Apron", "Saffron Syndicate", "Harbor Fire",
+      "Red Knife Collective", "Eclipse Kitchen", "Glasshouse Crew", "Iron Ladle", "Blue Smoke Brigade",
+      "Citrus & Steel", "Garnish Guild", "The Precision Plate", "Wild Coast Chefs", "Midnight Mise"
+    ];
+    const countries = [
+      { name:"France", flag:"🇫🇷" }, { name:"Japan", flag:"🇯🇵" }, { name:"USA", flag:"🇺🇸" },
+      { name:"Australia", flag:"🇦🇺" }, { name:"Italy", flag:"🇮🇹" }, { name:"Spain", flag:"🇪🇸" },
+      { name:"UK", flag:"🇬🇧" }, { name:"Sweden", flag:"🇸🇪" }, { name:"Singapore", flag:"🇸🇬" }
+    ];
+    const tierBase = comp.type === 'local' ? 55 : comp.type === 'regional' ? 62 : comp.type === 'national' ? 68 : comp.type === 'bocuse' ? 72 : comp.type === 'worldcup' ? 75 : 78;
+    const rand = (a,b)=>Math.random()*(b-a)+a;
+
+    const used = new Set();
+    const field = [];
+    for (let i=0;i<n;i++){
+      let name;
+      do { name = pools[Math.floor(Math.random()*pools.length)]; } while(used.has(name));
+      used.add(name);
+      const c = countries[Math.floor(Math.random()*countries.length)];
+      const strength = tierBase + rand(-8, +8);
+      const score = Math.max(0, Math.min(100, strength + rand(-6, +6)));
+      field.push({ name:`${c.flag} ${name}`, country:c.name, score:Number(score.toFixed(1)), isPlayer:false });
+    }
+    return field;
+  }
+
+  rankField(field, playerEntry) {
+    const all = [...field, playerEntry];
+    all.sort((a,b)=>b.score - a.score);
+    return all;
+  }
+
+  generateCommentary(comp, res) {
+    const lines = [];
+    if (res.placement <= 3) lines.push("Judges praised your composure and consistency on the pass.");
+    if (res.placement > 10) lines.push("The panel noted uneven execution across components.");
+    if (res.criteria?.taste >= 8.2) lines.push("Your flavour balance landed — clean seasoning and depth.");
+    if (res.criteria?.workflow <= 5.5) lines.push("Workflow looked frantic at times; handoffs cost seconds.");
+    if (res.penalties?.includes('late_plating')) lines.push("Late plating dragged timing marks down.");
+    if (res.penalties?.includes('missing_element')) lines.push("A missing element was called out in the critique.");
+    if (res.penalties?.includes('cross_contamination')) lines.push("A hygiene issue triggered a major deduction.");
+    if (res.cleanliness !== undefined && res.cleanliness >= 85) lines.push("Your station discipline stayed sharp — cloth control was obvious.");
+    if (res.comms !== undefined && res.comms >= 80) lines.push("Short calls and clear leadership improved the team rhythm.");
+    // ensure 3-5
+    while (lines.length < 3) lines.push("Small decisions under pressure shaped the final score.");
+    return lines.slice(0,5);
+  }
+
+  // ---------- Hot Kitchen UI ----------
+  renderHotKitchen() {
+    const hk = this.state.hotKitchen;
+    const comp = this.state.upcomingCompetition;
+    if (!hk) {
+      return `<div class="max-w-3xl mx-auto py-10"><div class="stat-card">No hot kitchen session. <button class="btn-primary mt-4" onclick="game.state.screen='story'; game.render();">Back</button></div></div>`;
+    }
+
+    const phase = hk.phases[hk.phaseIndex];
+    const pct = Math.round((hk.timeElapsed / hk.duration) * 100);
+
+    const memberName = (id) => this.hkMemberById(id)?.name || '—';
+    const stationCard = (station, title) => {
+      const tasks = Object.values(hk.taskState).filter(t => t.station === station);
+      const done = tasks.filter(t=>t.done).length;
+      const total = tasks.length;
+      const taskRows = tasks.map(t => {
+        const prereqMissing = (t.prereq||[]).filter(pid => !hk.taskState[pid]?.done);
+        const locked = prereqMissing.length > 0;
+        const btn = t.done
+          ? `<span class="text-green-400 text-sm font-bold">DONE</span>`
+          : `<button class="btn-secondary px-3 py-1 text-sm ${locked || hk.incident ? 'opacity-50' : ''}"
+               ${locked || hk.incident ? 'disabled' : ''}
+               onclick="game.hkDoTask('${t.id}')">Do (${t.minutes}m)</button>`;
+        return `
+          <div class="flex items-center justify-between py-2 border-b border-gray-800">
+            <div>
+              <div class="font-semibold">${t.label}</div>
+              <div class="text-xs text-gray-500">${locked ? 'Locked: ' + prereqMissing.map(x=>hk.taskState[x]?.label||x).join(', ') : 'Ready'}</div>
+            </div>
+            <div class="flex items-center gap-2">${btn}</div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="stat-card">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <div class="text-sm text-gray-500">${title}</div>
+              <div class="text-lg font-bold">${memberName(hk.assignments[station])}</div>
+            </div>
+            <div class="text-sm text-gray-400">${done}/${total} tasks</div>
+          </div>
+          <div class="text-xs text-gray-500 mb-3">Assign:
+            <select class="bg-gray-900 border border-gray-700 rounded px-2 py-1 ml-2"
+              onchange="game.hkSetAssignment('${station}', this.value)">
+              ${(this.state.members||[]).map(m => `<option value="${m.id}" ${m.id===hk.assignments[station]?'selected':''}>${m.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="max-h-72 overflow-auto pr-1">${taskRows}</div>
+        </div>
+      `;
+    };
+
+    const ticketRow = (t) => {
+      const sent = (t.status === 'sent' || t.status === 'late');
+      const dueTxt = `Due @ ${t.dueAt}m`;
+      const status = sent ? (t.status === 'late' ? 'LATE' : 'SENT') : 'PENDING';
+      const statusColor = sent ? (t.status==='late'?'text-yellow-400':'text-green-400') : 'text-gray-300';
+      const btn = sent
+        ? `<span class="${statusColor} text-sm font-bold">${status}</span>`
+        : `<button class="btn-primary px-3 py-1 text-sm ${hk.incident ? 'opacity-50' : ''}" ${hk.incident?'disabled':''} onclick="game.hkSendTicket('${t.id}')">Send</button>`;
+      return `
+        <div class="flex items-center justify-between py-2 border-b border-gray-800">
+          <div>
+            <div class="font-semibold">${t.label}</div>
+            <div class="text-xs text-gray-500">${dueTxt}</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="${statusColor} text-xs">${status}</div>
+            ${btn}
+          </div>
+        </div>
+      `;
+    };
+
+    const incidentBlock = hk.incident ? `
+      <div class="stat-card border border-red-500/40">
+        <div class="text-red-300 font-bold mb-2">🔥 INCIDENT: ${hk.incident.title}</div>
+        <div class="text-sm text-gray-300 mb-3">${hk.incident.desc}</div>
+        <div class="flex flex-col gap-2">
+          ${hk.incident.options.map(o => `
+            <button class="btn-primary px-4 py-2 text-left"
+              onclick="game.hkResolveIncident('${o.id}')">
+              ${o.label} <span class="text-xs text-gray-300">(Station: ${o.station}, DC ${o.diff})</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const focusButtons = `
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn-secondary px-3 py-2 text-sm ${hk.focus<=0||hk.incident?'opacity-50':''}" ${hk.focus<=0||hk.incident?'disabled':''} onclick="game.hkSpendFocus('calm')">🎧 Calm Reset</button>
+        <button class="btn-secondary px-3 py-2 text-sm ${hk.focus<=0||hk.incident?'opacity-50':''}" ${hk.focus<=0||hk.incident?'disabled':''} onclick="game.hkSpendFocus('clean')">🧼 Clean Reset</button>
+        <button class="btn-secondary px-3 py-2 text-sm ${hk.focus<=0||hk.incident?'opacity-50':''}" ${hk.focus<=0||hk.incident?'disabled':''} onclick="game.hkSpendFocus('qc')">👀 QC Boost</button>
+      </div>
+    `;
+
+    return `
+      <div class="max-w-6xl mx-auto py-8">
+        <div class="stat-card mb-6">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div class="text-sm text-gray-500">Competition Day • Hot Kitchen Mode</div>
+              <h1 class="text-3xl font-bold">${comp?.name || 'Hot Kitchen'}</h1>
+              <div class="text-sm text-gray-400">Phase: <span class="font-semibold text-white">${phase.name}</span> • Time: ${hk.timeElapsed}m elapsed • ${hk.timeLeft}m left</div>
+            </div>
+            <div class="w-full md:w-80">
+              <div class="text-xs text-gray-500 mb-1">Progress</div>
+              <div class="w-full bg-gray-800 rounded h-3 overflow-hidden">
+                <div class="bg-cyan-400 h-3" style="width:${pct}%"></div>
+              </div>
+              <div class="text-xs text-gray-500 mt-2">Focus Tokens: <span class="text-white font-bold">${hk.focus}</span></div>
+              ${focusButtons}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+            <div class="border border-gray-700 rounded p-3">
+              <div class="text-xs text-gray-500">Pressure</div>
+              <div class="text-xl font-bold">${hk.pressure.toFixed(0)}/100</div>
+            </div>
+            <div class="border border-gray-700 rounded p-3">
+              <div class="text-xs text-gray-500">Cleanliness</div>
+              <div class="text-xl font-bold">${hk.cleanliness.toFixed(0)}/100</div>
+            </div>
+            <div class="border border-gray-700 rounded p-3">
+              <div class="text-xs text-gray-500">Comms</div>
+              <div class="text-xl font-bold">${hk.comms.toFixed(0)}/100</div>
+            </div>
+            <div class="border border-gray-700 rounded p-3">
+              <div class="text-xs text-gray-500">Tickets Sent</div>
+              <div class="text-xl font-bold">${hk.tickets.filter(t=>t.status==='sent'||t.status==='late').length}/${hk.tickets.length}</div>
+            </div>
+          </div>
+        </div>
+
+        ${incidentBlock}
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="stat-card lg:col-span-1">
+            <h2 class="text-xl font-bold mb-3">Ticket Rail</h2>
+            <div class="text-sm text-gray-400 mb-3">Send plates as you go. Late or missing elements will hurt.</div>
+            <div class="max-h-96 overflow-auto pr-1">
+              ${hk.tickets.map(ticketRow).join('')}
+            </div>
+            <div class="mt-4 text-xs text-gray-500">Tip: Complete core tasks (protein, sauce, garnish, wipe discipline) before sending.</div>
+          </div>
+
+          <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+            ${stationCard('pass','Captain / Pass')}
+            ${stationCard('protein','Protein')}
+            ${stationCard('sauce','Sauce')}
+            ${stationCard('garnish','Garnish')}
+          </div>
+        </div>
+
+        <div class="stat-card mt-6">
+          <h2 class="text-xl font-bold mb-3">Hot Kitchen Log</h2>
+          <div class="text-sm text-gray-300 whitespace-pre-line">${hk.log.slice(-14).join('\\n') || 'No events yet. Start by setting your plate map and station setup.'}</div>
+          <div class="mt-5 flex gap-3 flex-wrap">
+            <button class="btn-secondary px-4 py-2" onclick="game.hkFinalize()">Finish Early (Judge call)</button>
+            <button class="btn-secondary px-4 py-2" onclick="game.state.screen='story'; game.hotKitchen=null; game.render();">Abort (debug)</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ---------- Enhanced competition simulation for non-hot-kitchen formats ----------
+  simulateCompetition(comp) {
+    // If format is hot kitchen, this should not be called (interactive mode handles it)
+    const t = this.state.team;
+    const bias = this.state.country?.rubric_bias || { taste:1, technique:1, workflow:1, hygiene:1, presentation:1, timing:1 };
+
+    const clamp = (v)=>Math.max(0, Math.min(10, v));
+    const rand = (a,b)=>Math.random()*(b-a)+a;
+
+    // Base criteria
+    const criteria = {
+      taste: clamp(5 + t.readiness/30 + t.morale/40 - t.fatigue/55 + rand(-1.0,1.0)),
+      technique: clamp(5 + t.reputation/20 + t.readiness/28 + rand(-1.0,1.0)),
+      workflow: clamp(5 + t.cohesion/30 + t.workflow_bonus/4 - t.fatigue/80 + rand(-1.0,1.0)),
+      hygiene: clamp(5 + (100-t.fatigue)/65 + rand(-1.0,1.0)),
+      presentation: clamp(5 + t.reputation/25 + t.readiness/35 + rand(-1.0,1.0)),
+      timing: clamp(5 + t.cohesion/80 - t.fatigue/70 + rand(-1.0,1.0))
+    };
+
+    // Apply bias
+    Object.keys(criteria).forEach(k => criteria[k] = clamp(criteria[k] * (bias[k] || 1)));
+
+    // Format-specific weights + special rules
+    let w = { taste:0.25, technique:0.22, workflow:0.18, hygiene:0.12, presentation:0.13, timing:0.10 };
+    const penalties = [];
+
+    if (comp.format === 'solo_live_cooking') {
+      w = { taste:0.28, technique:0.26, workflow:0.10, hygiene:0.12, presentation:0.12, timing:0.12 };
+      if (t.fatigue > 70 && Math.random() < 0.18) { penalties.push('late_plating'); criteria.timing = clamp(criteria.timing - 1.2); }
+    } else if (comp.format === 'team_relay') {
+      w = { taste:0.24, technique:0.22, workflow:0.24, hygiene:0.10, presentation:0.10, timing:0.10 };
+      if (t.cohesion < 40 && Math.random() < 0.25) { penalties.push('handoff_error'); criteria.workflow = clamp(criteria.workflow - 1.1); }
+    } else if (comp.format === 'bocuse_duo') {
+      w = { taste:0.22, technique:0.26, workflow:0.12, hygiene:0.10, presentation:0.22, timing:0.08 };
+      if (Math.random() < 0.14 + (t.risk/80)) { penalties.push('finish_fault'); criteria.presentation = clamp(criteria.presentation - 0.9); }
+    } else if (comp.format === 'worldcup_multi' || comp.format === 'olympics_multi') {
+      // multi-module: average of 3-4 modules; endurance matters
+      const modules = comp.format === 'worldcup_multi'
+        ? ['hot','cold','pastry']
+        : ['hot','cold','pastry','buffet'];
+
+      let modScores = [];
+      modules.forEach(mod => {
+        let modCriteria = { ...criteria };
+        if (mod === 'cold') {
+          modCriteria.presentation = clamp(modCriteria.presentation + 0.6);
+          modCriteria.hygiene = clamp(modCriteria.hygiene + 0.2);
+        }
+        if (mod === 'pastry') {
+          modCriteria.technique = clamp(modCriteria.technique + 0.4);
+          modCriteria.presentation = clamp(modCriteria.presentation + 0.4);
+          if (Math.random() < 0.10 + (t.fatigue/200)) { penalties.push('structure_failure'); modCriteria.presentation = clamp(modCriteria.presentation - 0.8); }
+        }
+        if (mod === 'buffet') {
+          modCriteria.workflow = clamp(modCriteria.workflow + 0.5);
+          modCriteria.timing = clamp(modCriteria.timing - 0.2);
+          if (Math.random() < 0.12 + (t.risk/120)) { penalties.push('missing_element'); modCriteria.workflow = clamp(modCriteria.workflow - 0.6); }
+        }
+        const wm = mod === 'hot'
+          ? { taste:0.26, technique:0.24, workflow:0.20, hygiene:0.12, presentation:0.10, timing:0.08 }
+          : mod === 'cold'
+            ? { taste:0.22, technique:0.20, workflow:0.14, hygiene:0.14, presentation:0.24, timing:0.06 }
+            : mod === 'pastry'
+              ? { taste:0.22, technique:0.26, workflow:0.12, hygiene:0.10, presentation:0.24, timing:0.06 }
+              : { taste:0.24, technique:0.22, workflow:0.20, hygiene:0.10, presentation:0.18, timing:0.06 };
+
+        let s = 0; Object.keys(wm).forEach(k => s += modCriteria[k] * wm[k] * 10);
+        modScores.push(s);
+      });
+
+      let avg = modScores.reduce((a,b)=>a+b,0) / modScores.length;
+      // endurance penalty
+      avg -= Math.max(0, (t.fatigue - 55) * 0.25);
+      // tiny variance
+      avg += rand(-2.5,2.5);
+      let score = Math.max(0, Math.min(100, avg));
+
+      const field = this.generateOpponents(comp, comp.format === 'olympics_multi' ? 24 : 18);
+      const player = { name:`${this.state.country?.flag || ''} Your Team`, country:this.state.country?.name || 'You', score: Number(score.toFixed(1)), isPlayer:true };
+      const ranked = this.rankField(field, player);
+      const placement = ranked.findIndex(x=>x.isPlayer) + 1;
+
+      return {
+        score: Math.round(score),
+        placement,
+        criteria,
+        penalties,
+        leaderboard: ranked.slice(0, 10),
+        commentary: this.generateCommentary(comp, { score, placement, criteria, penalties })
+      };
+    }
+
+    // Default weighted score
+    let score = 0;
+    Object.keys(w).forEach(k => score += criteria[k] * w[k] * 10);
+
+    // mistake chance
+    if (t.fatigue > 70 && Math.random() < 0.18) {
+      penalties.push('major_mistake');
+      score -= 10;
+    }
+    score = Math.max(0, Math.min(100, score));
+
+    const field = this.generateOpponents(comp, comp.type === 'local' ? 10 : comp.type === 'regional' ? 14 : 18);
+    const player = { name:`${this.state.country?.flag || ''} Your Team`, country:this.state.country?.name || 'You', score: Number(score.toFixed(1)), isPlayer:true };
+    const ranked = this.rankField(field, player);
+    const placement = ranked.findIndex(x=>x.isPlayer) + 1;
+
+    return {
+      score: Math.round(score),
+      placement,
+      criteria,
+      penalties,
+      leaderboard: ranked.slice(0, 10),
+      commentary: this.generateCommentary(comp, { score, placement, criteria, penalties })
+    };
+  }
+
+
+render() {
+    const app = document.getElementById('app');
+    
+    if (this.state.screen === 'welcome') {
+      app.innerHTML = this.renderWelcome();
+    } else if (this.state.screen === 'country_select') {
+      app.innerHTML = this.renderCountrySelect();
+    } else if (this.state.screen === 'team_draft') {
+      app.innerHTML = this.renderTeamDraft();
+    } else if (this.state.screen === 'story') {
+      app.innerHTML = this.renderStory();
+    } else if (this.state.screen === 'hot_kitchen') {
+      app.innerHTML = this.renderHotKitchen();
+    } else if (this.state.screen === 'competition') {
+      app.innerHTML = this.renderCompetition();
+    } else if (this.state.screen === 'season_end') {
+      app.innerHTML = this.renderSeasonEnd();
+    }
+    
+    this.attachEventListeners();
+  }
+  
+  renderWelcome() {
+    return `
+      <div class="min-h-screen flex items-center justify-center">
+        <div class="text-center max-w-2xl mx-auto px-4">
+          <h1 class="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-cyan-400 to-green-400 bg-clip-text text-transparent">
+            Global Kitchen
+          </h1>
+          <p class="text-xl md:text-2xl mb-8 text-gray-300">
+            Story Mode
+          </p>
+          <p class="text-lg mb-12 text-gray-400">
+            Build your culinary team, navigate challenges, and compete for glory across multiple seasons.
+            Every choice matters. Every competition counts.
+          </p>
+          <button class="btn-primary text-lg px-8 py-4" onclick="game.state.screen='country_select'; game.render();">
+            Begin Your Journey
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  
+  renderCountrySelect() {
+    return `
+      <div class="max-w-6xl mx-auto py-8">
+        <h1 class="text-4xl font-bold mb-4">Choose Your Country</h1>
+        <p class="text-gray-400 mb-8">Each country offers a unique path with different challenges and opportunities</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          ${this.countries.map(c => `
+            <div class="stat-card cursor-pointer hover:border-cyan-400 transition-all" onclick="game.selectCountry(game.countries.find(x => x.id === '${c.id}'))">
+              <div class="flex items-start gap-4 mb-4">
+                <div class="text-4xl">${c.flag}</div>
+                <div class="flex-1">
+                  <h2 class="text-2xl font-bold mb-1">${c.name}</h2>
+                  <p class="text-cyan-400 mb-2">${c.specialty}</p>
+                  <p class="text-sm text-gray-400">${c.description}</p>
+                </div>
+              </div>
+              
+              <div class="space-y-2 mb-4">
+                <div class="text-sm">
+                  <span class="text-gray-500">Pressures:</span>
+                  <span class="text-gray-300"> ${c.pressures.join(', ')}</span>
+                </div>
+                <div class="text-sm">
+                  <span class="text-gray-500">You'll Learn:</span>
+                  <span class="text-green-400"> ${c.learns.join(', ')}</span>
+                </div>
+              </div>
+              
+              <div class="text-sm text-gray-500">
+                Starting: ${c.startingBonus.budget ? `+$${c.startingBonus.budget}` : ''} 
+                ${c.startingBonus.reputation ? `+${c.startingBonus.reputation} Rep` : ''}
+                ${c.startingBonus.readiness ? `+${c.startingBonus.readiness} Readiness` : ''}
+                ${c.startingBonus.morale ? `+${c.startingBonus.morale} Morale` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  renderTeamDraft() {
+    return `
+      <div class="max-w-6xl mx-auto py-8">
+        <h1 class="text-4xl font-bold mb-4">Draft Your Team</h1>
+        <p class="text-gray-400 mb-8">Select 3-4 team members. Each brings unique skills and personality traits.</p>
+        
+        <div id="selectedArchetypes" class="mb-6">
+          <p class="text-sm text-gray-500">Selected: <span id="selectedCount">0</span> / 4</p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          ${this.archetypes.map(a => `
+            <div class="stat-card cursor-pointer hover:border-cyan-400 transition-all archetype-card" data-archetype="${a.id}">
+              <h3 class="text-xl font-bold mb-2">${a.name}</h3>
+              <p class="text-sm text-gray-400 mb-4">${a.description}</p>
+              
+              <div class="space-y-1 text-sm mb-4">
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Technical:</span>
+                  <span>${a.baseSkills.technical}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Creativity:</span>
+                  <span>${a.baseSkills.creativity}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Speed:</span>
+                  <span>${a.baseSkills.speed}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Consistency:</span>
+                  <span>${a.baseSkills.consistency}</span>
+                </div>
+              </div>
+              
+              <div class="text-xs text-gray-500">
+                Ego: ${a.traits.ego} | Patience: ${a.traits.patience} | Teamwork: ${a.traits.teamwork}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        
+        <button id="confirmDraft" class="btn-primary px-6 py-3 opacity-50" disabled>
+          Confirm Team
+        </button>
+      </div>
+    `;
+  }
+  
+  renderStory() {
+    const t = this.state.team;
+    const mission = this.state.currentMission;
+    
+    return `
+      <div class="max-w-6xl mx-auto py-8">
+        <!-- Header Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div class="stat-card">
+            <div class="text-sm text-gray-500">Season ${this.state.season} • Week ${this.state.week}</div>
+            <div class="text-lg font-bold">${this.state.country.flag} ${this.state.country.name}</div>
+          </div>
+          <div class="stat-card">
+            <div class="text-sm text-gray-500">Budget</div>
+            <div class="text-2xl font-bold ${t.budget < 500 ? 'text-red-400' : ''}">$${t.budget}</div>
+          </div>
+          <div class="stat-card">
+            <div class="text-sm text-gray-500">Reputation</div>
+            <div class="text-2xl font-bold">${t.reputation}</div>
+          </div>
+          <div class="stat-card">
+            <div class="text-sm text-gray-500">Readiness</div>
+            <div class="text-2xl font-bold">${t.readiness}</div>
+          </div>
+        </div>
+        
+        <!-- Team Health -->
+        <div class="stat-card mb-8">
+          <h2 class="text-xl font-bold mb-4">Team Status</h2>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <div class="text-sm text-gray-500 mb-1">Morale</div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${t.morale}%"></div>
+              </div>
+              <div class="text-xs text-gray-400 mt-1">${t.morale}/100</div>
+            </div>
+            <div>
+              <div class="text-sm text-gray-500 mb-1">Cohesion</div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${t.cohesion}%"></div>
+              </div>
+              <div class="text-xs text-gray-400 mt-1">${t.cohesion}/100</div>
+            </div>
+            <div>
+              <div class="text-sm text-gray-500 mb-1">Fatigue</div>
+              <div class="progress-bar">
+                <div class="progress-fill bg-red-500" style="width: ${t.fatigue}%"></div>
+              </div>
+              <div class="text-xs text-gray-400 mt-1">${t.fatigue}/100</div>
+            </div>
+            <div>
+              <div class="text-sm text-gray-500 mb-1">Risk</div>
+              <div class="progress-bar">
+                <div class="progress-fill bg-yellow-500" style="width: ${t.risk}%"></div>
+              </div>
+              <div class="text-xs text-gray-400 mt-1">${t.risk}/100</div>
+            </div>
+          </div>
+        </div>
+        
+        ${mission ? `
+        <!-- Current Mission -->
+        <div class="stat-card mb-8">
+          <div class="text-sm text-gray-500 mb-2">Chapter ${mission.chapter} • Week ${mission.week}</div>
+          <h2 class="text-3xl font-bold mb-6">${mission.title}</h2>
+          
+          <div class="space-y-4 mb-8">
+            ${mission.intro.map(p => `<p class="text-gray-300">${p}</p>`).join('')}
+          </div>
+          
+          ${this.state.lastOutcome ? `
+            <div class="stat-card result-good mb-6">
+              <p class="text-green-400">${this.state.lastOutcome}</p>
+            </div>
+          ` : `
+            <div class="space-y-4">
+              ${mission.choices.map((choice, idx) => `
+                <div class="choice-card" onclick="game.makeChoice(game.state.currentMission.choices[${idx}])">
+                  <h3 class="font-bold mb-2">${choice.label}</h3>
+                  ${choice.checks && choice.checks.length > 0 ? `
+                    <p class="text-xs text-gray-500">
+                      Requires: ${choice.checks[0].stat} ≥ ${choice.checks[0].difficulty}
+                    </p>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+        ` : `
+        <div class="stat-card text-center py-12">
+          <p class="text-gray-400 mb-4">Preparing for next challenge...</p>
+          <button class="btn-primary" onclick="game.advanceWeek()">Continue</button>
+        </div>
+        `}
+        
+        <!-- Team Roster -->
+        <div class="stat-card">
+          <h2 class="text-xl font-bold mb-4">Your Team</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${this.state.members.map(m => `
+              <div class="border border-gray-700 rounded-lg p-4">
+                <h3 class="font-bold mb-1">${m.name}</h3>
+                <p class="text-sm text-gray-500 mb-2">${m.archetypeName}</p>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div>Technical: ${m.skills.technical}</div>
+                  <div>Creativity: ${m.skills.creativity}</div>
+                  <div>Speed: ${m.skills.speed}</div>
+                  <div>Consistency: ${m.skills.consistency}</div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">
+                  Morale: ${m.morale} | Fatigue: ${m.fatigue}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  renderCompetition() {
+    const comp = this.state.upcomingCompetition;
+    const result = this.state.competitionResult;
+    
+    if (result) {
+      return `
+        <div class="max-w-4xl mx-auto py-8">
+          <div class="stat-card mb-8">
+            <h1 class="text-4xl font-bold mb-6">${comp.name}</h1>
+            
+            <div class="${result.placement <= 3 ? 'result-good' : result.placement > 10 ? 'result-bad' : ''} stat-card mb-6 text-center py-8">
+              <div class="text-6xl font-bold mb-4">
+                ${result.placement === 1 ? '🥇' : result.placement === 2 ? '🥈' : result.placement === 3 ? '🥉' : ''}
+              </div>
+              <div class="text-4xl font-bold mb-2">
+                ${result.placement === 1 ? '1st Place!' : 
+                  result.placement === 2 ? '2nd Place!' : 
+                  result.placement === 3 ? '3rd Place!' : 
+                  `${result.placement}th Place`}
+              </div>
+              <div class="text-2xl text-gray-400">Score: ${result.score}/100</div>
+              ${result.hotKitchen ? `<div class=\"mt-4 text-sm text-gray-300\">${result.narrative || ''}</div>` : ''}
+            </div>
+            
+            <div class="mb-6">
+              <h3 class="text-lg font-bold mb-3">Score Breakdown</h3>
+              ${result.hotKitchen && result.log ? `
+                <div class=\"mt-4 p-4 border border-gray-700 rounded\">
+                  <div class=\"text-sm text-gray-500 mb-2\">Hot Kitchen Log (last highlights)</div>
+                  <div class=\"text-sm text-gray-300 whitespace-pre-line\">${result.log.join('\\n')}</div>
+                </div>
+              ` : ''}
+
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                ${Object.entries(result.criteria).map(([key, val]) => `
+                  <div class="border border-gray-700 rounded p-3">
+                    <div class="text-sm text-gray-500 capitalize">${key}</div>
+                    <div class="text-xl font-bold">${val.toFixed(1)}/10</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            
+            <div class="text-center">
+            ${result.leaderboard ? `
+              <div class="mt-8">
+                <h3 class="text-lg font-bold mb-3">Leaderboard (Top 10)</h3>
+                <div class="border border-gray-700 rounded overflow-hidden">
+                  ${result.leaderboard.map((r, i) => `
+                    <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 ${r.isPlayer ? 'bg-cyan-900 bg-opacity-20' : ''}">
+                      <div class="flex items-center gap-3">
+                        <div class="w-8 text-gray-400">${i+1}</div>
+                        <div class="font-semibold">${r.name}</div>
+                        <div class="text-xs text-gray-500">${r.country}</div>
+                      </div>
+                      <div class="font-bold">${r.score.toFixed ? r.score.toFixed(1) : r.score}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            ${result.commentary ? `
+              <div class="mt-8">
+                <h3 class="text-lg font-bold mb-3">Judge Notes & Commentary</h3>
+                <div class="border border-gray-700 rounded p-4 text-sm text-gray-300 space-y-2">
+                  ${result.commentary.map(line => `<div>• ${line}</div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+              <button class="btn-primary px-8 py-3" onclick="game.continueAfterCompetition()">
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    return `
+      <div class="max-w-4xl mx-auto py-8">
+        <div class="stat-card mb-8">
+          <h1 class="text-4xl font-bold mb-6">${comp.name}</h1>
+          
+          <div class="grid grid-cols-2 gap-6 mb-8">
+            <div>
+              <h3 class="text-lg font-bold mb-3">Competition Details</h3>
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Type:</span>
+                  <span class="capitalize">${comp.type}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Team Size:</span>
+                  <span>${comp.team_size} chefs</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Entry Fee:</span>
+                  <span class="${this.state.team.budget < comp.entry_fee ? 'text-red-400' : ''}">$${comp.entry_fee}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <h3 class="text-lg font-bold mb-3">Prizes</h3>
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-gray-500">1st:</span>
+                  <span class="text-yellow-400">$${comp.prize.first}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">2nd:</span>
+                  <span class="text-gray-400">$${comp.prize.second}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">3rd:</span>
+                  <span class="text-orange-400">$${comp.prize.third}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="stat-card mb-6">
+            <h3 class="text-lg font-bold mb-3">Your Team's Readiness</h3>
+            <div class="progress-bar mb-2">
+              <div class="progress-fill" style="width: ${this.state.team.readiness}%"></div>
+            </div>
+            <div class="text-sm text-gray-400">${this.state.team.readiness}/100</div>
+          </div>
+          
+          <div class="flex gap-4 justify-center">
+            <button class="btn-primary px-8 py-3" onclick="game.enterCompetition()">
+              Enter Competition
+            </button>
+            <button class="btn-secondary px-8 py-3" onclick="game.continueAfterCompetition()">
+              Skip
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  renderSeasonEnd() {
+    const score = this.state.seasonScore;
+    
+    return `
+      <div class="max-w-4xl mx-auto py-8">
+        <div class="stat-card text-center mb-8">
+          <h1 class="text-5xl font-bold mb-4">Season ${this.state.season} Complete!</h1>
+          <p class="text-xl text-gray-400 mb-8">${this.state.country.flag} ${this.state.country.name}</p>
+          
+          <div class="stat-card mb-8">
+            <h2 class="text-3xl font-bold mb-6">Final Score: ${score.total}</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div>
+                <div class="text-4xl mb-2">🏅</div>
+                <div class="text-sm text-gray-500">Medals</div>
+                <div class="text-2xl font-bold">${score.medals}</div>
+                <div class="text-xs text-gray-400">
+                  ${this.state.medals.gold}G ${this.state.medals.silver}S ${this.state.medals.bronze}B
+                </div>
+              </div>
+              <div>
+                <div class="text-4xl mb-2">⭐</div>
+                <div class="text-sm text-gray-500">Reputation</div>
+                <div class="text-2xl font-bold">${score.reputation}</div>
+                <div class="text-xs text-gray-400">
+                  ${this.state.team.reputation} final rep
+                </div>
+              </div>
+              <div>
+                <div class="text-4xl mb-2">💰</div>
+                <div class="text-sm text-gray-500">Budget</div>
+                <div class="text-2xl font-bold">${score.budget}</div>
+                <div class="text-xs text-gray-400">
+                  $${this.state.team.budget} remaining
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="space-y-4">
+            <button class="btn-primary px-8 py-3" onclick="game.startNewSeason()">
+              Begin Season ${this.state.season + 1}
+            </button>
+            <div>
+              <button class="btn-secondary px-6 py-2" onclick="game.state.screen='welcome'; game.render();">
+                Main Menu
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        ${this.state.seasonHistory.length > 1 ? `
+        <div class="stat-card">
+          <h2 class="text-xl font-bold mb-4">Season History</h2>
+          <div class="space-y-2">
+            ${this.state.seasonHistory.map(s => `
+              <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+                <span>Season ${s.season}</span>
+                <span class="text-gray-400">Score: ${s.score}</span>
+                <span class="text-sm text-gray-500">
+                  ${s.medals.gold}G ${s.medals.silver}S ${s.medals.bronze}B
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  }
+  
+  attachEventListeners() {
+    // Team draft selection
+    if (this.state.screen === 'team_draft') {
+      const selectedArchetypes = [];
+      const cards = document.querySelectorAll('.archetype-card');
+      const confirmBtn = document.getElementById('confirmDraft');
+      const countEl = document.getElementById('selectedCount');
+      
+      cards.forEach(card => {
+        card.addEventListener('click', () => {
+          const id = card.dataset.archetype;
+          const arch = this.archetypes.find(a => a.id === id);
+          
+          if (card.classList.contains('border-cyan-400')) {
+            // Deselect
+            card.classList.remove('border-cyan-400', 'bg-cyan-900', 'bg-opacity-20');
+            const idx = selectedArchetypes.findIndex(a => a.id === id);
+            if (idx > -1) selectedArchetypes.splice(idx, 1);
+          } else {
+            // Select (if not at limit)
+            if (selectedArchetypes.length < 4) {
+              card.classList.add('border-cyan-400', 'bg-cyan-900', 'bg-opacity-20');
+              selectedArchetypes.push(arch);
+            }
+          }
+          
+          countEl.textContent = selectedArchetypes.length;
+          
+          if (selectedArchetypes.length >= 3) {
+            confirmBtn.disabled = false;
+            confirmBtn.classList.remove('opacity-50');
+          } else {
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add('opacity-50');
+          }
+        });
+      });
+      
+      confirmBtn.addEventListener('click', () => {
+        if (selectedArchetypes.length >= 3) {
+          this.draftTeam(selectedArchetypes);
+        }
+      });
+    }
+  }
+}
+
+
+// Initialize game (with visible error reporting)
+let game;
+
+function showFatalError(err, context='') {
+  const app = document.getElementById('app');
+  if (!app) return;
+  const msg = (err && (err.stack || err.message)) ? (err.stack || err.message) : String(err);
+  app.innerHTML = `
+    <div style="min-height:100vh; padding:24px; color: #e7eefc; font-family: system-ui, -apple-system, sans-serif;">
+      <h1 style="font-size:28px; font-weight:800; margin-bottom:12px;">⚠️ Global Kitchen failed to load</h1>
+      <div style="opacity:.9; margin-bottom:16px;">${context ? context : 'A runtime error occurred.'}</div>
+      <pre style="white-space:pre-wrap; background: rgba(255,255,255,.06); border: 1px solid rgba(231,238,252,.14); padding:16px; border-radius:12px; overflow:auto;">${msg}</pre>
+      <div style="margin-top:16px; opacity:.9;">
+        Tip: if you're on GitHub Pages, hard refresh (iOS Safari: pull down to reload) or clear cache. If this is a local file, try opening via GitHub Pages.
+      </div>
+    </div>
+  `;
+}
+
+window.addEventListener('error', (e) => {
+  showFatalError(e.error || e.message || 'Unknown error', 'Window error event');
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  showFatalError(e.reason || 'Unhandled promise rejection', 'Unhandled promise rejection');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const app = document.getElementById('app');
+  if (app) {
+    app.innerHTML = `<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; color:#e7eefc; opacity:.9;">Loading…</div>`;
+  }
+  try {
+    game = new CulinaryStorySimulator();
+  } catch (err) {
+    showFatalError(err, 'Error while constructing the game');
+  }
+});
+
+</script>
+
+</body>
+</html>
